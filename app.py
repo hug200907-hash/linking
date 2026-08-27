@@ -1,3 +1,4 @@
+import random
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -6,22 +7,30 @@ st.set_page_config(page_title="Đồng bộ P2P Realtime", page_icon="⚡", layo
 st.title("⚡ Đồng bộ P2P Realtime (WebRTC + PeerJS)")
 st.caption("Truyền dữ liệu trực tiếp 2 chiều giữa 2 trình duyệt mà không thông qua Database trung gian.")
 
-# Tối ưu 1: Gợi ý hoặc nhập Room ID
+# Quản lý Room ID bằng session_state để không bị mất khi bấm nút
+if "p2p_room_id" not in st.session_state:
+    st.session_state.p2p_room_id = "room-888"
+
 col1, col2 = st.columns([3, 1])
 with col1:
-    sync_key = st.text_input("🔑 Nhập/Tạo Mã Đồng Bộ (Ví dụ: room-888):", value="room-888")
+    user_input = st.text_input("🔑 Nhập/Tạo Mã Đồng Bộ (Ví dụ: room-888):", value=st.session_state.p2p_room_id)
+    if user_input != st.session_state.p2p_room_id:
+        st.session_state.p2p_room_id = user_input
+
 with col2:
-    st.write("") # Căn chỉnh UI
+    st.write("")
     st.write("")
     if st.button("🎲 Tạo mã ngẫu nhiên"):
-        import random
-        sync_key = f"room-{random.randint(100, 999)}"
+        st.session_state.p2p_room_id = f"room-{random.randint(100, 999)}"
+        st.rerun()
 
-if not sync_key.strip():
+sync_key = st.session_state.p2p_room_id.strip()
+
+if not sync_key:
     st.warning("⚠️ Vui lòng nhập mã phòng để bắt đầu.")
     st.stop()
 
-# Mã HTML + JS đã được tinh chỉnh tối ưu
+# HTML + JS đã tích hợp STUN Server & cấu hình PeerJS chuẩn 443
 html_code = f"""
 <!DOCTYPE html>
 <html>
@@ -80,13 +89,28 @@ html_code = f"""
     </div>
 
     <script>
-        const ROOM_ID = "st_p2p_v2_{sync_key.strip()}";
+        const ROOM_ID = "st_p2p_v2_{sync_key}";
         const statusEl = document.getElementById('status');
         const localText = document.getElementById('localText');
         const remoteText = document.getElementById('remoteText');
         
         let peer = null;
         let conn = null;
+
+        // Cấu hình kết nối SSL + STUN Google giúp vượt tường lửa
+        const peerConfig = {{
+            host: '0.peerjs.com',
+            port: 443,
+            path: '/',
+            secure: true,
+            debug: 1,
+            config: {{
+                iceServers: [
+                    {{ urls: 'stun:stun.l.google.com:19302' }},
+                    {{ urls: 'stun:stun1.l.google.com:19302' }}
+                ]
+            }}
+        }};
 
         function updateStatus(text, type = 'warning') {{
             statusEl.innerText = text;
@@ -99,54 +123,56 @@ html_code = f"""
             }}
         }}
 
-        // Khởi tạo Peer làm Host trước
         function initPeer() {{
-            peer = new Peer(ROOM_ID);
+            if (typeof Peer === 'undefined') {{
+                updateStatus("⏳ Đang tải thư viện PeerJS...", 'warning');
+                setTimeout(initPeer, 300);
+                return;
+            }}
+
+            peer = new Peer(ROOM_ID, peerConfig);
 
             peer.on('open', (id) => {{
-                updateStatus("🟢 Đã mở phòng thành công! Hãy mở thiết bị 2 và nhập mã '" + "{sync_key.strip()}" + "' để ghép nối.");
+                updateStatus("🟢 Đã mở phòng thành công! Hãy mở thiết bị 2 và nhập mã '{sync_key}' để ghép nối.", "warning");
             }});
 
-            // Lắng nghe kết nối từ Client (Đối phương)
             peer.on('connection', (c) => {{
                 conn = c;
                 setupEvents();
             }});
 
-            // Xử lý khi ID đã tồn tại -> Chuyển sang đóng vai Client kết nối vào Host
             peer.on('error', (err) => {{
                 if (err.type === 'unavailable-id') {{
-                    updateStatus("🔄 Đã tìm thấy Host, đang kết nối trực tiếp...");
-                    peer.destroy(); // Hủy peer cũ
+                    updateStatus("🔄 Đã tìm thấy Máy 1 (Host). Đang kết nối P2P...", "warning");
+                    if (peer) peer.destroy();
                     
-                    // Tạo Peer mới với ID ngẫu nhiên để làm Client
-                    peer = new Peer();
+                    peer = new Peer(peerConfig);
                     peer.on('open', () => {{
                         conn = peer.connect(ROOM_ID, {{ reliable: true }});
                         setupEvents();
                     }});
                 }} else {{
-                    updateStatus("❌ Lỗi PeerJS: " + err.type, 'error');
+                    updateStatus("❌ Lỗi P2P: " + err.type, 'error');
                 }}
             }});
         }}
 
         function setupEvents() {{
+            if (!conn) return;
+
             conn.on('open', () => {{
-                updateStatus("✅ ĐÃ KẾT NỐI P2P THÀNH CÔNG! Bắt đầu gõ để đồng bộ tức thì.", 'success');
+                updateStatus("✅ KẾT NỐI P2P THÀNH CÔNG! Bắt đầu gõ để đồng bộ tức thì.", 'success');
             }});
 
-            // Tối ưu 2: Nhận dữ liệu Realtime khi bên kia đang gõ
             conn.on('data', (data) => {{
                 remoteText.value = data;
             }});
 
             conn.on('close', () => {{
-                updateStatus("⚠️ Kết nối P2P đã ngắt. Đang chờ kết nối lại...", 'error');
+                updateStatus("⚠️ Kết nối P2P đã ngắt.", 'error');
             }});
         }}
 
-        // Tối ưu 3: Tự động truyền dữ liệu theo sự kiện 'input' (Realtime Sync)
         localText.addEventListener('input', (e) => {{
             const val = e.target.value;
             if (conn && conn.open) {{
@@ -154,11 +180,10 @@ html_code = f"""
             }}
         }});
 
-        // Khởi chạy
-        initPeer();
+        setTimeout(initPeer, 200);
     </script>
 </body>
 </html>
 """
 
-components.html(html_code, height=270)
+components.html(html_code, height=300)
