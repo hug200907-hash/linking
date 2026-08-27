@@ -72,7 +72,7 @@ html_code = f"""
                     conn = clientPeer.connect("streamlit_p2p_room_" + roomKey);
                     setupConnection();
                 }});
-            } else {{
+            else {{
                 statusEl.innerText = "❌ Lỗi kết nối: " + err;
                 statusEl.style.color = "red";
             }}
