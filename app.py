@@ -186,4 +186,4 @@ html_code = f"""
 </html>
 """
 
-components.html(html_code, height=300)
+st.iframe(srcdoc=html_code, height=300)
