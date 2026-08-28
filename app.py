@@ -1,14 +1,12 @@
 import random
-import urllib.parse
 import streamlit as st
-import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Đồng bộ P2P Realtime", page_icon="⚡", layout="wide")
 
 st.title("⚡ Đồng bộ P2P Realtime (WebRTC + PeerJS)")
 st.caption("Truyền dữ liệu trực tiếp 2 chiều giữa 2 trình duyệt mà không thông qua Database trung gian.")
 
-# Quản lý Room ID bằng session_state để không bị mất khi bấm nút
+# Quản lý Room ID bằng session_state
 if "p2p_room_id" not in st.session_state:
     st.session_state.p2p_room_id = "room-888"
 
@@ -31,7 +29,7 @@ if not sync_key:
     st.warning("⚠️ Vui lòng nhập mã phòng để bắt đầu.")
     st.stop()
 
-# HTML + JS đã tích hợp STUN Server & cấu hình PeerJS chuẩn 443
+# HTML + JS giữ nguyên logic P2P
 html_code = f"""
 <!DOCTYPE html>
 <html>
@@ -98,7 +96,6 @@ html_code = f"""
         let peer = null;
         let conn = null;
 
-        // Cấu hình kết nối SSL + STUN Google giúp vượt tường lửa
         const peerConfig = {{
             host: '0.peerjs.com',
             port: 443,
@@ -187,6 +184,5 @@ html_code = f"""
 </html>
 """
 
-# Mã hóa chuỗi HTML thành Data URI chuẩn để dùng được với iframe
-data_uri = "data:text/html;charset=utf-8," + urllib.parse.quote(html_code)
-components.iframe(src=data_uri, height=300)
+# Sử dụng st.iframe truyền srcData thay cho components.html
+st.iframe(src=html_code, height=300)
