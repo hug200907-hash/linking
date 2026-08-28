@@ -1,4 +1,5 @@
 import random
+import urllib.parse
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -186,4 +187,6 @@ html_code = f"""
 </html>
 """
 
-st.iframe(srcdoc=html_code, height=300)
+# Mã hóa chuỗi HTML thành Data URI chuẩn để dùng được với iframe
+data_uri = "data:text/html;charset=utf-8," + urllib.parse.quote(html_code)
+components.iframe(src=data_uri, height=300)
