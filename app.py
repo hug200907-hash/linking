@@ -650,8 +650,8 @@ class KnowledgeEngine:
         
         scored.sort(key=lambda x: x[0], reverse=True)
         return [t for _, t in scored[:top_k]]
-    
-    get_common_condition_patterns(self, limit: int = 10) -> List[str]:
+        
+    def get_common_condition_patterns(self, limit: int = 10) -> List[str]:
         """Get most common condition patterns"""
         patterns = self.knowledge["patterns"]["condition_patterns"]
         counter = Counter(patterns)
