@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS cho giao diện hiện đại & tối giản
+# Custom CSS cho giao diện
 st.markdown("""
 <style>
     .main-header {
@@ -54,18 +54,24 @@ st.markdown("""
         border-radius: 20px;
         font-weight: bold;
     }
-    .stProgress > div > div > div > div {
-        background-color: #1E88E5;
+    .flashcard-box {
+        background-color: #FFFFFF;
+        border: 2px solid #1E88E5;
+        border-radius: 16px;
+        padding: 40px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        margin-bottom: 20px;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. KHỞI TẠO STATE (SESSION STATE)
+# 2. KHỞI TẠO STATE (SESSION STATE SAFEGUARD)
 # ==========================================
 if "user_profile" not in st.session_state:
     st.session_state.user_profile = {
-        "onboarded": False,
+        "onboarded": True,
         "goal": "IELTS 6.5+",
         "level": "B1",
         "topics": ["Technology", "Business"],
@@ -76,7 +82,6 @@ if "user_profile" not in st.session_state:
     }
 
 if "daily_words" not in st.session_state:
-    # Mẫu 5 từ mặc định ban đầu
     st.session_state.daily_words = [
         {
             "word": "Resilient",
@@ -150,11 +155,32 @@ if "daily_words" not in st.session_state:
         }
     ]
 
+# Khởi tạo an toàn cho lịch sử học tập & trạng thái Flashcard để tránh KeyError
+if "learning_history" not in st.session_state:
+    st.session_state.learning_history = {}
+
+if "flashcard_index" not in st.session_state:
+    st.session_state.flashcard_index = 0
+
+if "show_answer" not in st.session_state:
+    st.session_state.show_answer = False
+
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 if "notes" not in st.session_state:
     st.session_state.notes = {}
+
+# Đảm bảo tất cả từ hiện tại đều có record trong learning_history
+for item in st.session_state.daily_words:
+    w_key = item['word']
+    if w_key not in st.session_state.learning_history:
+        st.session_state.learning_history[w_key] = {
+            "streak": 0,
+            "reviews": 0,
+            "last_reviewed": None,
+            "status": item.get("status", "Learning")
+        }
 
 # ==========================================
 # 3. AI HELPER FUNCTION (MINIMAX/MINIMAX-M3:FREE)
@@ -194,7 +220,7 @@ with st.sidebar:
     
     # Cấu hình AI API
     st.subheader("🔑 Cấu hình AI Model")
-    api_key_input = st.text_input("OpenRouter / MiniMax API Key:", type="password", help="Nhập API Key của bạn để sử dụng model minimax/minimax-m3:free")
+    api_key_input = st.text_input("OpenRouter / MiniMax API Key:", type="password", help="Nhập API Key để dùng model minimax/minimax-m3:free")
     base_url_input = st.text_input("Base URL:", value="https://openrouter.ai/api/v1")
     
     st.markdown("---")
@@ -225,7 +251,7 @@ if menu == "🏠 Daily Stream (5 từ hôm nay)":
     st.markdown("<h1 class='main-header'>Daily Stream 📚</h1>", unsafe_allow_html=True)
     st.markdown("<p class='sub-header'>Học ít – Nhớ sâu. Dưới đây là 5 từ vựng tối ưu cho hôm nay dựa trên mục tiêu của bạn.</p>", unsafe_allow_html=True)
     
-    col_btn1, col_btn2 = st.columns([2, 8])
+    col_btn1, col_btn2 = st.columns([3, 7])
     with col_btn1:
         if st.button("✨ AI Tạo Stream mới (5 từ)"):
             if api_key_input:
@@ -246,6 +272,9 @@ if menu == "🏠 Daily Stream (5 từ hôm nay)":
                         for w in parsed_words:
                             w["status"] = "Learning"
                             w["memory_strength"] = 50
+                            st.session_state.learning_history[w['word']] = {
+                                "streak": 0, "reviews": 0, "last_reviewed": None, "status": "Learning"
+                            }
                         st.session_state.daily_words = parsed_words
                         st.success("Đã tạo thành công 5 từ mới từ MiniMax AI!")
                         st.rerun()
@@ -268,7 +297,7 @@ if menu == "🏠 Daily Stream (5 từ hôm nay)":
             </div>
             """, unsafe_allow_html=True)
             
-            # Audio Stream Simulator (st.components.v1.iframe thay cho st.components.v1.html)
+            # Audio Stream Simulator (st.iframe thay cho st.html)
             sound_url = f"https://dict.youdao.com/dictvoice?audio={item['word']}&type=2"
             st.components.v1.iframe(src=sound_url, height=40, scrolling=False)
             
@@ -289,7 +318,6 @@ if menu == "🏠 Daily Stream (5 từ hôm nay)":
                     st.info(item.get('mnemonic', 'Không có mẹo nhớ.'))
                     
                     # Thêm ghi chú cá nhân
-                    note_key = f"note_{item['word']}"
                     current_note = st.session_state.notes.get(item['word'], "")
                     user_note = st.text_input("📝 Ghi chú cá nhân:", value=current_note, key=f"input_{item['word']}")
                     if user_note != current_note:
@@ -312,7 +340,7 @@ if menu == "🏠 Daily Stream (5 từ hôm nay)":
             st.markdown("<br>", unsafe_allow_html=True)
 
 # ==========================================
-# 6. MÀN HÌNH 2: HỆ THỐNG ÔN TẬP ĐA DẠNG (8+ MODES)
+# 6. MÀN HÌNH 2: HỆ THỐNG ÔN TẬP ĐA DẠNG (FIX KEYERROR 'STREAK')
 # ==========================================
 elif menu == "🎯 Ôn tập đa dạng (Practice)":
     st.markdown("<h1 class='main-header'>Hệ Thống Ôn Tập Đa Dạng 🎯</h1>", unsafe_allow_html=True)
@@ -330,22 +358,76 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
         "🗣️ Speaking Practice"
     ])
     
-    # 1. Flashcard
+    # 1. Flashcard (Fixed logic & KeyError)
     with tabs[0]:
         st.subheader("🃏 Flashcard Thông Minh")
-        card_idx = st.slider("Chọn từ ôn tập:", 1, len(words), 1) - 1
-        w = words[card_idx]
-        
-        with st.expander("👉 Click để lật mặt sau", expanded=False):
-            st.markdown(f"### {w['word']} {w['ipa']}")
-            st.markdown(f"**Nghĩa:** {w['vietnamese']}")
-            st.markdown(f"**Ví dụ:** {w['examples'][0]}")
-        st.info(f"Mặt trước: Nghĩa tiếng Việt -> **{w['vietnamese']}**")
+        if len(words) > 0:
+            current_idx = st.session_state.flashcard_index % len(words)
+            current_word = words[current_idx]
+            word_str = current_word['word']
+            
+            # Cập nhật an toàn vào learning_history nếu từ chưa tồn tại
+            if word_str not in st.session_state.learning_history:
+                st.session_state.learning_history[word_str] = {
+                    "streak": 0, "reviews": 0, "last_reviewed": None, "status": "Learning"
+                }
+
+            # Mặt trước / Mặt sau Flashcard
+            st.markdown("<div class='flashcard-box'>", unsafe_allow_html=True)
+            if not st.session_state.show_answer:
+                st.markdown(f"## ❓ {current_word['vietnamese']}")
+                st.caption("Hãy tự nhớ lại từ tiếng Anh tương ứng...")
+            else:
+                st.markdown(f"# 🔤 {current_word['word']} <span style='font-size: 1.2rem; color: gray;'>{current_word['ipa']}</span>", unsafe_allow_html=True)
+                st.markdown(f"**Nghĩa Việt:** {current_word['vietnamese']}")
+                st.markdown(f"**English:** {current_word['english_meaning']}")
+                st.markdown(f"*Ví dụ:* {current_word['examples'][0]}")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Control buttons
+            if not st.session_state.show_answer:
+                if st.button("👀 Hiện Mặt Sau (Xem đáp án)", use_container_width=True):
+                    st.session_state.show_answer = True
+                    st.rerun()
+            else:
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if st.button("🔴 Quên / Khó"):
+                        hist = st.session_state.learning_history.setdefault(word_str, {})
+                        hist['streak'] = 0
+                        hist['reviews'] = hist.get('reviews', 0) + 1
+                        hist['last_reviewed'] = datetime.date.today().isoformat()
+                        
+                        st.session_state.show_answer = False
+                        st.session_state.flashcard_index += 1
+                        st.rerun()
+
+                with col2:
+                    if st.button("🟡 Quen thuộc"):
+                        hist = st.session_state.learning_history.setdefault(word_str, {})
+                        hist['streak'] = hist.get('streak', 0) + 1
+                        hist['reviews'] = hist.get('reviews', 0) + 1
+                        hist['last_reviewed'] = datetime.date.today().isoformat()
+                        
+                        st.session_state.show_answer = False
+                        st.session_state.flashcard_index += 1
+                        st.rerun()
+
+                with col3:
+                    if st.button("🟢 Nhớ rất rõ"):
+                        hist = st.session_state.learning_history.setdefault(word_str, {})
+                        hist['streak'] = hist.get('streak', 0) + 1
+                        hist['reviews'] = hist.get('reviews', 0) + 1
+                        hist['last_reviewed'] = datetime.date.today().isoformat()
+                        
+                        st.session_state.show_answer = False
+                        st.session_state.flashcard_index += 1
+                        st.rerun()
 
     # 2. Typed Recall
     with tabs[1]:
         st.subheader("⌨️ Typed Recall (Chủ động gõ từ)")
-        target_w = random.choice(words)
+        target_w = words[st.session_state.flashcard_index % len(words)]
         st.write(f"Định nghĩa: **{target_w['english_meaning']}** (Nghĩa Việt: *{target_w['vietnamese']}*)")
         user_input = st.text_input("Nhập chính xác từ tiếng Anh:", key="typed_recall_input")
         if st.button("Kiểm tra gõ từ"):
@@ -420,8 +502,8 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
         st.subheader("🗣️ Luyện nói & Phát âm")
         spk_word = words[0]
         st.markdown(f"Đọc to câu sau: **'{spk_word['examples'][0]}'**")
-        st.caption("Ghi âm hoặc tự đọc to, sau đó dán văn bản bạn đã nói vào bên dưới để AI đánh giá:")
-        spoken_text = st.text_input("Văn bản nhận diện giọng nói (hoặc nhập câu bạn vừa đọc):")
+        st.caption("Nhập nội dung bạn đã đọc vào bên dưới để AI kiểm tra và chấm điểm:")
+        spoken_text = st.text_input("Văn bản câu bạn vừa đọc:")
         if st.button("🤖 AI Chấm điểm phát âm"):
             if api_key_input and spoken_text:
                 prompt = f"So sánh câu gốc: '{spk_word['examples'][0]}' và câu người học đọc: '{spoken_text}'. Đánh giá điểm phát âm/độ chính xác trên thang 100 và góp ý sửa lỗi ngắn gọn."
@@ -438,12 +520,12 @@ elif menu == "🤖 AI Tutor Assistant":
     st.markdown("<h1 class='main-header'>AI Tutor Assistant 🤖</h1>", unsafe_allow_html=True)
     st.markdown("<p class='sub-header'>Hỏi bất kỳ thắc mắc nào về từ vựng, ngữ pháp, ngữ cảnh sử dụng với model MiniMax-M3.</p>", unsafe_allow_html=True)
 
-    # Chat interface
+    # Hiển thị lịch sử chat
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
 
-    if user_prompt := st.chat_input("Hỏi AI (VD: Phân biệt Resilient và Tough, Tạo thêm 3 ví dụ cho từ Lucid...)"):
+    if user_prompt := st.chat_input("Hỏi AI (VD: Phân biệt Resilient và Tough, Tạo thêm ví dụ cho từ Lucid...)"):
         st.session_state.chat_history.append({"role": "user", "content": user_prompt})
         with st.chat_message("user"):
             st.write(user_prompt)
@@ -474,7 +556,7 @@ elif menu == "📊 Tiến độ & Gamification":
     
     st.subheader("📊 Độ mạnh ký ức (Memory Strength) của 5 từ hôm nay")
     df_words = pd.DataFrame([
-        {"Từ vựng": w["word"], "Chỉ số ghi nhớ (%)": w["memory_strength"], "Trạng thái": w["status"]}
+        {"Từ vựng": w["word"], "Chỉ số ghi nhớ (%)": w.get("memory_strength", 50), "Trạng thái": w.get("status", "Learning")}
         for w in st.session_state.daily_words
     ])
     st.bar_chart(df_words.set_index("Từ vựng")["Chỉ số ghi nhớ (%)"])
