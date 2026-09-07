@@ -1,276 +1,516 @@
 import streamlit as st
 import json
 import random
+import datetime
 import pandas as pd
 from openai import OpenAI
 
 # ==========================================
-# 1. CẤU HÌNH & KHỞI TẠO SESSION STATE
+# 1. TÙY CHỈNH TRANG & GIAO DIỆN (PAGE CONFIG)
 # ==========================================
-st.set_page_config(page_title="VocabStream - 5WordsAI", page_icon="🧠", layout="centered")
+st.set_page_config(
+    page_title="VocabStream - 5 từ mỗi ngày",
+    page_icon="📚",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
+# Custom CSS cho giao diện hiện đại & tối giản
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.2rem;
+        font-weight: 700;
+        color: #1E88E5;
+        margin-bottom: 0px;
+    }
+    .sub-header {
+        font-size: 1.1rem;
+        color: #555;
+        margin-bottom: 20px;
+    }
+    .word-card {
+        background-color: #F8F9FA;
+        border-radius: 12px;
+        padding: 20px;
+        border-left: 5px solid #1E88E5;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        margin-bottom: 15px;
+    }
+    .word-title {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #0D47A1;
+    }
+    .ipa-text {
+        font-size: 1.1rem;
+        color: #E65100;
+        font-style: italic;
+    }
+    .badge-streak {
+        background-color: #FFF3E0;
+        color: #E65100;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-weight: bold;
+    }
+    .stProgress > div > div > div > div {
+        background-color: #1E88E5;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ==========================================
+# 2. KHỞI TẠO STATE (SESSION STATE)
+# ==========================================
 if "user_profile" not in st.session_state:
-    st.session_state.user_profile = {"target": "Giao tiếp", "level": "B1", "topic": "Đời sống"}
+    st.session_state.user_profile = {
+        "onboarded": False,
+        "goal": "IELTS 6.5+",
+        "level": "B1",
+        "topics": ["Technology", "Business"],
+        "daily_minutes": 10,
+        "streak": 5,
+        "total_mastered": 28,
+        "retention_rate": 88
+    }
+
 if "daily_words" not in st.session_state:
-    st.session_state.daily_words = []
-if "learning_history" not in st.session_state:
-    st.session_state.learning_history = {}
-if "flashcard_index" not in st.session_state:
-    st.session_state.flashcard_index = 0
-if "show_answer" not in st.session_state:
-    st.session_state.show_answer = False
+    # Mẫu 5 từ mặc định ban đầu
+    st.session_state.daily_words = [
+        {
+            "word": "Resilient",
+            "ipa": "/rɪˈzɪl.jənt/",
+            "vietnamese": "Kiên cường, mau phục hồi",
+            "english_meaning": "Able to withstand or recover quickly from difficult conditions.",
+            "examples": [
+                "The local economy is remarkably resilient despite global turbulence.",
+                "She showed a resilient spirit during her job search."
+            ],
+            "collocations": ["resilient economy", "highly resilient", "resilient nature"],
+            "mnemonic": "Gợi nhớ: 'Re' (Lại) + 'Silient' (im lặng âm thầm vượt qua mọi sóng gió) -> Kiên cường.",
+            "status": "Learning",
+            "memory_strength": 75
+        },
+        {
+            "word": "Foster",
+            "ipa": "/ˈfɒs.tər/",
+            "vietnamese": "Nuôi dưỡng, thúc đẩy",
+            "english_meaning": "Encourage or promote the development of something.",
+            "examples": [
+                "The teacher aims to foster a creative environment in the classroom.",
+                "Good leaders foster teamwork and trust."
+            ],
+            "collocations": ["foster innovation", "foster collaboration", "foster growth"],
+            "mnemonic": "Gợi nhớ: 'FOSter' phát âm gần như 'Phở' -> Ăn phở để nuôi dưỡng cơ thể.",
+            "status": "Learning",
+            "memory_strength": 60
+        },
+        {
+            "word": "Pragmatic",
+            "ipa": "/præɡˈmæt.ɪk/",
+            "vietnamese": "Thực tế, thực dụng",
+            "english_meaning": "Dealing with things sensibly and realistically based on practical considerations.",
+            "examples": [
+                "We need a pragmatic approach to solving this budget issue.",
+                "He made a pragmatic decision to accept the offer."
+            ],
+            "collocations": ["pragmatic approach", "pragmatic solution", "pragmatic view"],
+            "mnemonic": "Gợi nhớ: 'Prag' gần giống 'Practice' (Thực hành) -> Hướng tới thực tế.",
+            "status": "Reviewing",
+            "memory_strength": 85
+        },
+        {
+            "word": "Lucid",
+            "ipa": "/ˈluː.sɪd/",
+            "vietnamese": "Rõ ràng, minh mẫn",
+            "english_meaning": "Expressed clearly; easy to understand.",
+            "examples": [
+                "She gave a lucid explanation of a complex scientific theory.",
+                "He remained lucid and alert throughout his speech."
+            ],
+            "collocations": ["lucid explanation", "lucid dream", "lucid thinking"],
+            "mnemonic": "Gợi nhớ: 'Lucid' nghe như 'Lúc đi' -> Lúc đi học tư duy luôn sáng suốt, rõ ràng.",
+            "status": "Learning",
+            "memory_strength": 50
+        },
+        {
+            "word": "Mitigate",
+            "ipa": "/ˈmɪt.ɪ.ɡeɪt/",
+            "vietnamese": "Giảm nhẹ, làm dịu",
+            "english_meaning": "Make less severe, serious, or painful.",
+            "examples": [
+                "New safety measures were introduced to mitigate risks.",
+                "Planting trees helps mitigate the impacts of climate change."
+            ],
+            "collocations": ["mitigate risk", "mitigate impact", "mitigate damage"],
+            "mnemonic": "Gợi nhớ: 'Miti' -> Mi-ni (nhỏ lại) + 'gate' (cổng) -> Thu nhỏ cổng để giảm thiểu rủi ro.",
+            "status": "Reviewing",
+            "memory_strength": 90
+        }
+    ]
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+if "notes" not in st.session_state:
+    st.session_state.notes = {}
 
 # ==========================================
-# 2. HÀM TƯƠNG TÁC AI (KIỂM TRA KEY AN TOÀN)
+# 3. AI HELPER FUNCTION (MINIMAX/MINIMAX-M3:FREE)
 # ==========================================
-def get_ai_client(api_key):
-    # Kiểm tra key hợp lệ trước khi khởi tạo OpenAI Client
-    if not api_key or not isinstance(api_key, str) or not api_key.strip():
-        raise ValueError("API Key không hợp lệ hoặc đang để trống.")
+def call_minimax_ai(prompt: str, system_prompt: str = "You are an expert AI English Tutor.", api_key: str = "", base_url: str = "https://openrouter.ai/api/v1") -> str:
+    """Gọi API mô hình minimax/minimax-m3:free thông qua OpenAI client format"""
+    if not api_key:
+        return "⚠️ Vui lòng nhập OpenRouter/MiniMax API Key ở thanh Sidebar bên trái để kích hoạt AI."
     
-    return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=api_key.strip(),
-    )
-
-def generate_daily_words(api_key, target, level, topic):
     try:
-        client = get_ai_client(api_key)
-        prompt = f"""
-        Đóng vai một chuyên gia ngôn ngữ. Dựa trên mục tiêu học: {target}, trình độ: {level}, chủ đề yêu thích: {topic}.
-        Hãy chọn đúng 5 từ vựng tiếng Anh phù hợp nhất để học hôm nay.
-        Trả về KẾT QUẢ DUY NHẤT LÀ ĐỊNH DẠNG JSON ARRAY, không giải thích gì thêm.
-        Cấu trúc mỗi object:
-        [
-            {{
-                "word": "từ tiếng Anh",
-                "pronunciation": "phát âm IPA",
-                "meaning": "nghĩa tiếng Việt",
-                "examples": ["ví dụ 1", "ví dụ 2"],
-                "mnemonic": "câu gợi nhớ hoặc mẹo nhớ (tiếng Việt)",
-                "collocation": "1 cụm từ đi kèm phổ biến"
-            }}
-        ]
-        """
+        client = OpenAI(
+            base_url=base_url,
+            api_key=api_key,
+        )
         response = client.chat.completions.create(
             model="minimax/minimax-m3:free",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=1000
         )
-        content = response.choices[0].message.content
-        
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-            
-        words = json.loads(content)
-        return words
-    except ValueError as ve:
-        st.error(f"⚠️ {ve}")
-        return []
+        return response.choices[0].message.content
     except Exception as e:
-        st.error(f"❌ Lỗi khi gọi AI API: {e}")
-        return []
-
-def generate_quiz(api_key, word):
-    try:
-        client = get_ai_client(api_key)
-        prompt = f"""
-        Tạo 1 câu hỏi trắc nghiệm điền từ vào chỗ trống tiếng Anh để kiểm tra từ "{word}".
-        Trả về DUY NHẤT JSON:
-        {{
-            "question": "Câu tiếng Anh có chỗ trống chứa dấu ___",
-            "options": ["A", "B", "C", "D"],
-            "answer": "Từ đúng"
-        }}
-        """
-        response = client.chat.completions.create(
-            model="minimax/minimax-m3:free",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.5
-        )
-        content = response.choices[0].message.content
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-        return json.loads(content)
-    except Exception as e:
-        st.error(f"Lỗi tạo câu hỏi: {e}")
-        return None
+        return f"❌ Lỗi kết nối AI API: {str(e)}"
 
 # ==========================================
-# 3. GIAO DIỆN CHÍNH
+# 4. SIDEBAR & NAVIGATION
 # ==========================================
-st.title("🧠 VocabStream - Daily5AI")
-st.caption("5 từ mỗi ngày – Nhớ sâu, không quên")
-
-# --- LẤY API KEY AN TOÀN BÊN SIDEBAR ---
 with st.sidebar:
-    st.header("⚙️ Cài đặt hệ thống")
+    st.image("https://img.icons8.com/isometric-folders/100/book.png", width=60)
+    st.title("VocabStream")
+    st.caption("5 từ mỗi ngày – Nhớ sâu, không quên")
     
-    api_key = ""
-    # 1. Ưu tiên lấy key từ Secrets
-    if "MINIMAX_API_KEY" in st.secrets and st.secrets["MINIMAX_API_KEY"].strip():
-        api_key = st.secrets["MINIMAX_API_KEY"].strip()
-        st.success("✅ Đã kết nối API tự động (từ Secrets)")
-    else:
-        # 2. Nếu Secrets không có, cho phép nhập tay
-        api_key = st.text_input("🔑 Nhập OpenRouter API Key", type="password", help="Dùng cho Minimax API")
-        if not api_key.strip():
-            st.warning("⚠️ Vui lòng nhập API Key để ứng dụng hoạt động.")
-
     st.markdown("---")
-    st.markdown("""
-    **Core Values:**
-    - 🎯 Học đúng 5 từ/ngày
-    - 🔄 Spaced Repetition
-    - 🤖 AI Cá nhân hóa 100%
-    """)
-
-tab1, tab2, tab3, tab4 = st.tabs(["👤 Cá nhân hóa", "📚 5 Từ Hôm Nay", "🎮 Ôn Tập", "📈 Tiến Độ"])
-
-# --- TAB 1: ONBOARDING ---
-with tab1:
-    st.subheader("Thiết lập lộ trình học")
-    col1, col2 = st.columns(2)
-    with col1:
-        target = st.selectbox("Mục tiêu học tập", ["IELTS", "TOEIC", "Giao tiếp", "Công việc", "Du lịch"], index=2)
-        level = st.selectbox("Trình độ hiện tại", ["A1 - Người mới", "A2 - Cơ bản", "B1 - Trung cấp", "B2 - Khá", "C1 - Cao cấp"], index=2)
-    with col2:
-        topic = st.selectbox("Chủ đề yêu thích", ["Công nghệ", "Y tế", "Kinh doanh", "Đời sống", "Du lịch", "Giáo dục", "Giải trí"], index=3)
-        time_commit = st.slider("Thời gian học/ngày (phút)", 5, 30, 10)
     
-    if st.button("Lưu cấu hình", type="primary"):
-        st.session_state.user_profile = {"target": target, "level": level, "topic": topic}
-        st.success("✅ Đã lưu lộ trình học cá nhân!")
-
-# --- TAB 2: DAILY STREAM (5 TỪ) ---
-with tab2:
-    st.subheader("Bài học hôm nay của bạn")
+    # Cấu hình AI API
+    st.subheader("🔑 Cấu hình AI Model")
+    api_key_input = st.text_input("OpenRouter / MiniMax API Key:", type="password", help="Nhập API Key của bạn để sử dụng model minimax/minimax-m3:free")
+    base_url_input = st.text_input("Base URL:", value="https://openrouter.ai/api/v1")
     
-    if not api_key.strip():
-        st.error("❌ Vui lòng cung cấp OpenRouter API Key ở sidebar bên trái để tiếp tục.")
-    else:
-        if st.button("✨ Nhờ AI Tạo 5 Từ Mới", use_container_width=True):
-            with st.spinner("🤖 AI đang phân tích và chọn 5 từ phù hợp..."):
-                p = st.session_state.user_profile
-                words = generate_daily_words(api_key, p["target"], p["level"].split(" ")[0], p["topic"])
-                
-                if words and len(words) > 0:
-                    st.session_state.daily_words = words
-                    for w in words:
-                        if w["word"] not in st.session_state.learning_history:
-                            st.session_state.learning_history[w["word"]] = {"retention": 0, "reviews": 0}
-                    st.success("🎉 Đã tạo xong bài học!")
-
-        if st.session_state.daily_words:
-            st.markdown("---")
-            for i, word_data in enumerate(st.session_state.daily_words):
-                with st.expander(f"**{i+1}. {word_data.get('word', '')}** (/{word_data.get('pronunciation', '')}/) - {word_data.get('meaning', '')}"):
-                    st.markdown(f"**💡 Mẹo nhớ:** {word_data.get('mnemonic', '')}")
-                    st.markdown(f"**🔗 Collocation:** {word_data.get('collocation', '')}")
-                    st.markdown("**📝 Ví dụ:**")
-                    for ex in word_data.get('examples', []):
-                        st.markdown(f"- *{ex}*")
-
-# --- TAB 3: ÔN TẬP ---
-with tab3:
-    st.subheader("Ôn tập đa dạng (Active Recall)")
+    st.markdown("---")
     
-    if not st.session_state.daily_words:
-        st.info("Hãy sang tab '5 Từ Hôm Nay' để tạo bài học trước.")
-    else:
-        mode = st.radio("Chọn phương pháp ôn tập:", ["🗂️ Flashcard thông minh", "📝 Trắc nghiệm AI (Điền từ)"], horizontal=True)
-        st.markdown("---")
-        
-        if mode == "🗂️ Flashcard thông minh":
-            idx = st.session_state.flashcard_index % len(st.session_state.daily_words)
-            current_word = st.session_state.daily_words[idx]
-            
+    # Navigation Menu
+    st.subheader("📌 Điều hướng")
+    menu = st.radio(
+        "Chọn màn hình:",
+        [
+            "🏠 Daily Stream (5 từ hôm nay)",
+            "🎯 Ôn tập đa dạng (Practice)",
+            "🤖 AI Tutor Assistant",
+            "📊 Tiến độ & Gamification",
+            "⚙️ Onboarding & Thiết lập"
+        ]
+    )
+    
+    st.markdown("---")
+    # Quick Stats Widget
+    st.markdown(f"🔥 **Streak:** <span class='badge-streak'>{st.session_state.user_profile['streak']} Ngày</span>", unsafe_allow_html=True)
+    st.markdown(f"🏆 **Từ đã Master:** **{st.session_state.user_profile['total_mastered']} từ**")
+    st.markdown(f"📈 **Tỷ lệ ghi nhớ:** **{st.session_state.user_profile['retention_rate']}%**")
+
+# ==========================================
+# 5. MÀN HÌNH 1: DAILY STREAM (5 TỪ MỖI NGÀY)
+# ==========================================
+if menu == "🏠 Daily Stream (5 từ hôm nay)":
+    st.markdown("<h1 class='main-header'>Daily Stream 📚</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='sub-header'>Học ít – Nhớ sâu. Dưới đây là 5 từ vựng tối ưu cho hôm nay dựa trên mục tiêu của bạn.</p>", unsafe_allow_html=True)
+    
+    col_btn1, col_btn2 = st.columns([2, 8])
+    with col_btn1:
+        if st.button("✨ AI Tạo Stream mới (5 từ)"):
+            if api_key_input:
+                with st.spinner("AI đang soạn 5 từ phù hợp nhất..."):
+                    prompt = f"""
+                    Tạo danh sách 5 từ vựng tiếng Anh theo tiêu chí:
+                    - Trình độ: {st.session_state.user_profile['level']}
+                    - Mục tiêu: {st.session_state.user_profile['goal']}
+                    - Chủ đề: {', '.join(st.session_state.user_profile['topics'])}
+                    Trả về định dạng JSON duy nhất là một Array gồm 5 Object với các key chính xác sau:
+                    "word", "ipa", "vietnamese", "english_meaning", "examples" (mảng 2 câu), "collocations" (mảng 3 cụm), "mnemonic" (mẹo nhớ).
+                    Chỉ trả về JSON thuần, không chèn markdown hay văn bản ngoài.
+                    """
+                    res = call_minimax_ai(prompt, api_key=api_key_input, base_url=base_url_input)
+                    try:
+                        clean_json = res.strip().strip("```json").strip("```").strip()
+                        parsed_words = json.loads(clean_json)
+                        for w in parsed_words:
+                            w["status"] = "Learning"
+                            w["memory_strength"] = 50
+                        st.session_state.daily_words = parsed_words
+                        st.success("Đã tạo thành công 5 từ mới từ MiniMax AI!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error("Lỗi khi đọc phản hồi JSON từ AI. Vui lòng thử lại.")
+            else:
+                st.warning("Vui lòng nhập API Key ở sidebar để tạo từ mới bằng AI.")
+
+    # Hiển thị danh sách 5 từ
+    for idx, item in enumerate(st.session_state.daily_words):
+        with st.container():
             st.markdown(f"""
-            <div style="padding: 40px; border-radius: 10px; border: 2px solid #ccc; text-align: center; background-color: #f9f9f9; color: #333; margin-bottom: 20px;">
-                <h1 style="margin:0; font-size: 40px;">{current_word['word']}</h1>
-                <p style="color: #666; font-size: 18px;">/{current_word.get('pronunciation', '')}/</p>
+            <div class='word-card'>
+                <div style='display: flex; justify-content: space-between; align-items: center;'>
+                    <span class='word-title'>{idx+1}. {item['word']}</span>
+                    <span class='ipa-text'>{item['ipa']}</span>
+                </div>
+                <p><b>Nghĩa Việt:</b> <span style='color: #2E7D32; font-weight: bold;'>{item['vietnamese']}</span></p>
+                <p><b>English Meaning:</b> {item['english_meaning']}</p>
             </div>
             """, unsafe_allow_html=True)
             
-            if st.session_state.show_answer:
-                st.success(f"**Nghĩa:** {current_word['meaning']}")
-                st.write(f"**Mẹo nhớ:** {current_word.get('mnemonic', '')}")
-                
-                col1, col2, col3 = st.columns(3)
-                if col1.button("🔴 Quên"):
-                    st.session_state.learning_history[current_word['word']]['retention'] -= 10
-                    st.session_state.show_answer = False
-                    st.session_state.flashcard_index += 1
-                    st.rerun()
-                if col2.button("🟡 Nhớ mang máng"):
-                    st.session_state.learning_history[current_word['word']]['reviews'] += 1
-                    st.session_state.show_answer = False
-                    st.session_state.flashcard_index += 1
-                    st.rerun()
-                if col3.button("🟢 Nhớ rất rõ"):
-                    st.session_state.learning_history[current_word['word']]['retention'] += 20
-                    st.session_state.learning_history[current_word['word']]['reviews'] += 1
-                    st.session_state.show_answer = False
-                    st.session_state.flashcard_index += 1
-                    st.rerun()
-            else:
-                if st.button("Lật thẻ (Show Answer)", use_container_width=True, type="primary"):
-                    st.session_state.show_answer = True
-                    st.rerun()
-
-        elif mode == "📝 Trắc nghiệm AI (Điền từ)":
-            if not api_key.strip():
-                st.warning("Cần API Key để tạo câu hỏi trắc nghiệm bằng AI.")
-            else:
-                word_to_quiz = random.choice(st.session_state.daily_words)["word"]
-                if st.button("Tạo câu hỏi ngữ cảnh thực tế", type="primary"):
-                    with st.spinner("AI đang tạo ngữ cảnh..."):
-                        quiz_data = generate_quiz(api_key, word_to_quiz)
-                        if quiz_data:
-                            st.session_state.current_quiz = quiz_data
-                
-                if "current_quiz" in st.session_state:
-                    q = st.session_state.current_quiz
-                    st.markdown(f"### {q.get('question', '')}")
+            # Audio Stream Simulator (st.components.v1.iframe thay cho st.components.v1.html)
+            sound_url = f"https://dict.youdao.com/dictvoice?audio={item['word']}&type=2"
+            st.components.v1.iframe(src=sound_url, height=40, scrolling=False)
+            
+            # Chi tiết mở rộng
+            with st.expander(f"🔍 Xem ví dụ, Collocations & Mnemonic cho '{item['word']}'"):
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.markdown("**📝 Câu ví dụ:**")
+                    for ex in item.get('examples', []):
+                        st.markdown(f"- *{ex}*")
                     
-                    with st.form("quiz_form"):
-                        choice = st.radio("Chọn đáp án đúng:", q.get('options', []))
-                        submitted = st.form_submit_button("Kiểm tra đáp án")
-                        
-                        if submitted:
-                            if choice.lower() == q['answer'].lower():
-                                st.success(f"Chính xác! 🎉 Đáp án là: **{q['answer']}**")
-                                if q['answer'] in st.session_state.learning_history:
-                                    st.session_state.learning_history[q['answer']]['retention'] += 15
-                            else:
-                                st.error(f"Sai rồi. Đáp án đúng là: **{q['answer']}**")
-                                if q['answer'] in st.session_state.learning_history:
-                                    st.session_state.learning_history[q['answer']]['retention'] -= 5
+                    st.markdown("**🔗 Collocations quan trọng:**")
+                    for col in item.get('collocations', []):
+                        st.markdown(f"- `{col}`")
+                
+                with col_b:
+                    st.markdown("**💡 Mnemonic (Gợi nhớ):**")
+                    st.info(item.get('mnemonic', 'Không có mẹo nhớ.'))
+                    
+                    # Thêm ghi chú cá nhân
+                    note_key = f"note_{item['word']}"
+                    current_note = st.session_state.notes.get(item['word'], "")
+                    user_note = st.text_input("📝 Ghi chú cá nhân:", value=current_note, key=f"input_{item['word']}")
+                    if user_note != current_note:
+                        st.session_state.notes[item['word']] = user_note
+                        st.toast(f"Đã lưu ghi chú cho từ {item['word']}!")
 
-# --- TAB 4: TIẾN ĐỘ ---
-with tab4:
-    st.subheader("Phân tích độ nhớ (Spaced Repetition)")
+            # Action Buttons
+            c1, c2, c3 = st.columns([2, 2, 6])
+            with c1:
+                if st.button(f"✅ Quen rồi", key=f"easy_{idx}"):
+                    item['status'] = "Mastered"
+                    item['memory_strength'] = min(100, item['memory_strength'] + 20)
+                    st.toast(f"Đã đánh dấu '{item['word']}' là Mastered!")
+            with c2:
+                if st.button(f"🔴 Khó nhớ", key=f"hard_{idx}"):
+                    item['status'] = "Reviewing"
+                    item['memory_strength'] = max(20, item['memory_strength'] - 15)
+                    st.toast(f"Đã thêm '{item['word']}' vào danh sách cần ôn gấp!")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+# ==========================================
+# 6. MÀN HÌNH 2: HỆ THỐNG ÔN TẬP ĐA DẠNG (8+ MODES)
+# ==========================================
+elif menu == "🎯 Ôn tập đa dạng (Practice)":
+    st.markdown("<h1 class='main-header'>Hệ Thống Ôn Tập Đa Dạng 🎯</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='sub-header'>Học theo nguyên lý Spaced Repetition (SRS) với các chế độ ôn tập chủ động.</p>", unsafe_allow_html=True)
+
+    words = st.session_state.daily_words
     
-    if not st.session_state.learning_history:
-        st.info("Chưa có dữ liệu học tập.")
-    else:
-        words_mastered = sum(1 for w, data in st.session_state.learning_history.items() if data['retention'] > 50)
+    tabs = st.tabs([
+        "🃏 Flashcard", 
+        "⌨️ Typed Recall", 
+        "📝 Fill-in-the-blank", 
+        "🔘 Multiple Choice", 
+        "📖 Story Mode (AI)", 
+        "🎭 Situation Quiz",
+        "🗣️ Speaking Practice"
+    ])
+    
+    # 1. Flashcard
+    with tabs[0]:
+        st.subheader("🃏 Flashcard Thông Minh")
+        card_idx = st.slider("Chọn từ ôn tập:", 1, len(words), 1) - 1
+        w = words[card_idx]
         
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Streak", "1 ngày", "🔥")
-        col2.metric("Tổng từ đang học", str(len(st.session_state.learning_history)))
-        col3.metric("Từ đã thành thạo", str(words_mastered), f"+{words_mastered}")
+        with st.expander("👉 Click để lật mặt sau", expanded=False):
+            st.markdown(f"### {w['word']} {w['ipa']}")
+            st.markdown(f"**Nghĩa:** {w['vietnamese']}")
+            st.markdown(f"**Ví dụ:** {w['examples'][0]}")
+        st.info(f"Mặt trước: Nghĩa tiếng Việt -> **{w['vietnamese']}**")
+
+    # 2. Typed Recall
+    with tabs[1]:
+        st.subheader("⌨️ Typed Recall (Chủ động gõ từ)")
+        target_w = random.choice(words)
+        st.write(f"Định nghĩa: **{target_w['english_meaning']}** (Nghĩa Việt: *{target_w['vietnamese']}*)")
+        user_input = st.text_input("Nhập chính xác từ tiếng Anh:", key="typed_recall_input")
+        if st.button("Kiểm tra gõ từ"):
+            if user_input.strip().lower() == target_w['word'].lower():
+                st.success("🎉 Chính xác! Bạn đã ghi nhớ từ này rất chuẩn.")
+            else:
+                st.error(f"❌ Sai rồi. Đáp án đúng là: **{target_w['word']}**")
+
+    # 3. Fill-in-the-blank
+    with tabs[2]:
+        st.subheader("📝 Điền từ vào chỗ trống")
+        target_w = words[0]
+        example_sentence = target_w['examples'][0]
+        masked_sentence = example_sentence.replace(target_w['word'], "_______").replace(target_w['word'].lower(), "_______")
         
-        df = pd.DataFrame.from_dict(st.session_state.learning_history, orient='index').reset_index()
-        df.columns = ['Từ vựng', 'Điểm Retention (%)', 'Số lần ôn']
-        df['Điểm Retention (%)'] = df['Điểm Retention (%)'].clip(0, 100)
+        st.markdown(f"**Câu:** {masked_sentence}")
+        ans = st.text_input("Từ còn thiếu là gì?", key="fill_blank_input")
+        if st.button("Kiểm tra đáp án"):
+            if target_w['word'].lower() in ans.strip().lower():
+                st.success("🎉 Xuất sắc! Sử dụng đúng ngữ cảnh.")
+            else:
+                st.error(f"❌ Đáp án đúng là: **{target_w['word']}**")
+
+    # 4. Multiple Choice
+    with tabs[3]:
+        st.subheader("🔘 Trắc nghiệm nhanh")
+        q_word = words[1]
+        options = [q_word['vietnamese']] + [w['vietnamese'] for w in words if w['word'] != q_word['word']][:3]
+        random.shuffle(options)
         
-        st.markdown("---")
-        st.bar_chart(data=df.set_index('Từ vựng')['Điểm Retention (%)'])
+        st.markdown(f"Từ **'{q_word['word']}'** có nghĩa là gì?")
+        choice = st.radio("Chọn đáp án đúng:", options, key="mc_choice")
+        if st.button("Gửi đáp án"):
+            if choice == q_word['vietnamese']:
+                st.success("✅ Đúng rồi!")
+            else:
+                st.error(f"❌ Khái niệm đúng phải là: {q_word['vietnamese']}")
+
+    # 5. Story Mode (AI)
+    with tabs[4]:
+        st.subheader("📖 Story Mode (AI tạo câu chuyện)")
+        st.write("AI sẽ tạo một câu chuyện ngắn kết nối cả 5 từ vựng hôm nay để giúp bạn nhớ theo ngữ cảnh liên hoàn.")
+        if st.button("🎬 Tạo đoạn văn với 5 từ hôm nay (dùng MiniMax AI)"):
+            if api_key_input:
+                word_list = ", ".join([w['word'] for w in words])
+                prompt = f"Viết một đoạn văn ngắn tiếng Anh (khoảng 80-120 từ) lồng ghép tự nhiên 5 từ vựng sau: {word_list}. Bôi đen (bold) 5 từ đó và kèm dịch nghĩa tiếng Việt bên dưới."
+                with st.spinner("AI đang sáng tạo câu chuyện..."):
+                    story = call_minimax_ai(prompt, api_key=api_key_input, base_url=base_url_input)
+                    st.markdown(story)
+            else:
+                st.warning("Vui lòng nhập API Key ở thanh bên trái để sử dụng tính năng này.")
+
+    # 6. Situation Quiz
+    with tabs[5]:
+        st.subheader("🎭 Tình huống thực tế")
+        st.write("Bạn đang làm việc trong dự án công ty và đối mặt với khủng hoảng chi phí.")
+        st.markdown("> *“Tình huống đòi hỏi bạn phải đưa ra giải pháp giảm thiểu tối đa rủi ro thiệt hại.”*")
+        st.markdown("Bạn sẽ chọn hành động nào ứng với từ vựng đúng?")
+        sit_choice = st.selectbox("Chọn hành động:", [
+            "Pragmatic approach to mitigate risk",
+            "Lucid dream to ignore reality",
+            "Foster the problem"
+        ])
+        if st.button("Kiểm tra tình huống"):
+            if "mitigate risk" in sit_choice:
+                st.success("🎯 Chính xác! 'Mitigate risk' là giảm thiểu rủi ro trong kinh doanh.")
+            else:
+                st.info("💡 Hãy thử lại với hành động mang nghĩa giảm nhẹ rủi ro.")
+
+    # 7. Speaking Practice
+    with tabs[6]:
+        st.subheader("🗣️ Luyện nói & Phát âm")
+        spk_word = words[0]
+        st.markdown(f"Đọc to câu sau: **'{spk_word['examples'][0]}'**")
+        st.caption("Ghi âm hoặc tự đọc to, sau đó dán văn bản bạn đã nói vào bên dưới để AI đánh giá:")
+        spoken_text = st.text_input("Văn bản nhận diện giọng nói (hoặc nhập câu bạn vừa đọc):")
+        if st.button("🤖 AI Chấm điểm phát âm"):
+            if api_key_input and spoken_text:
+                prompt = f"So sánh câu gốc: '{spk_word['examples'][0]}' và câu người học đọc: '{spoken_text}'. Đánh giá điểm phát âm/độ chính xác trên thang 100 và góp ý sửa lỗi ngắn gọn."
+                with st.spinner("AI đang chấm điểm..."):
+                    feedback = call_minimax_ai(prompt, api_key=api_key_input, base_url=base_url_input)
+                    st.markdown(feedback)
+            else:
+                st.warning("Nhập API Key và nội dung đã đọc để AI chấm điểm.")
+
+# ==========================================
+# 7. MÀN HÌNH 3: AI TUTOR ASSISTANT (MINIMAX-M3)
+# ==========================================
+elif menu == "🤖 AI Tutor Assistant":
+    st.markdown("<h1 class='main-header'>AI Tutor Assistant 🤖</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='sub-header'>Hỏi bất kỳ thắc mắc nào về từ vựng, ngữ pháp, ngữ cảnh sử dụng với model MiniMax-M3.</p>", unsafe_allow_html=True)
+
+    # Chat interface
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
+
+    if user_prompt := st.chat_input("Hỏi AI (VD: Phân biệt Resilient và Tough, Tạo thêm 3 ví dụ cho từ Lucid...)"):
+        st.session_state.chat_history.append({"role": "user", "content": user_prompt})
+        with st.chat_message("user"):
+            st.write(user_prompt)
+
+        with st.chat_message("assistant"):
+            if api_key_input:
+                with st.spinner("AI đang phản hồi..."):
+                    system_p = f"You are VocabStream AI Tutor, specialized in helping English learners (Target: {st.session_state.user_profile['goal']}). Give clear, friendly, and structured responses."
+                    reply = call_minimax_ai(user_prompt, system_prompt=system_p, api_key=api_key_input, base_url=base_url_input)
+                    st.write(reply)
+                    st.session_state.chat_history.append({"role": "assistant", "content": reply})
+            else:
+                st.warning("Vui lòng cung cấp API Key ở Sidebar để chat với AI.")
+
+# ==========================================
+# 8. MÀN HÌNH 4: TIẾN ĐỘ & GAMIFICATION
+# ==========================================
+elif menu == "📊 Tiến độ & Gamification":
+    st.markdown("<h1 class='main-header'>Tiến Độ Học Tập 📊</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='sub-header'>Theo dõi chỉ số ghi nhớ dài hạn (Retention Rate) & Huy hiệu đạt được.</p>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("🔥 Chuỗi Streak", f"{st.session_state.user_profile['streak']} Ngày", "+1 ngày so với hôm qua")
+    col2.metric("🏆 Tổng từ đã Master", f"{st.session_state.user_profile['total_mastered']} Từ", "+5 từ tuần này")
+    col3.metric("🧠 Retention Rate", f"{st.session_state.user_profile['retention_rate']}%", "+2%")
+
+    st.markdown("---")
+    
+    st.subheader("📊 Độ mạnh ký ức (Memory Strength) của 5 từ hôm nay")
+    df_words = pd.DataFrame([
+        {"Từ vựng": w["word"], "Chỉ số ghi nhớ (%)": w["memory_strength"], "Trạng thái": w["status"]}
+        for w in st.session_state.daily_words
+    ])
+    st.bar_chart(df_words.set_index("Từ vựng")["Chỉ số ghi nhớ (%)"])
+
+    st.markdown("---")
+    st.subheader("🏅 Huy hiệu đạt được (Badges)")
+    b1, b2, b3, b4 = st.columns(4)
+    b1.info("🔥 **7-Day Streak**\n\nHọc liên tục 7 ngày")
+    b2.info("🎯 **Master 50**\n\nThành thạo 50 từ")
+    b3.info("⚡ **Perfect Week**\n\nHoàn thành 100% bài tập tuần")
+    b4.success("🛡️ **Memory Guard**\n\nGiữ retention rate > 85%")
+
+# ==========================================
+# 9. MÀN HÌNH 5: ONBOARDING & CÁ NHÂN HÓA
+# ==========================================
+elif menu == "⚙️ Onboarding & Thiết lập":
+    st.markdown("<h1 class='main-header'>Thiết Lập Lộ Trình Cá Nhân ⚙️</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='sub-header'>Điều chỉnh mục tiêu và thời lượng học để AI tối ưu 5 từ vựng mỗi ngày.</p>", unsafe_allow_html=True)
+
+    with st.form("onboarding_form"):
+        goal = st.selectbox("1. Mục tiêu chính của bạn:", [
+            "IELTS 6.5–7.5+", "TOEIC 700+", "Giao tiếp công việc", "Du lịch & Đời sống", "Chuyên ngành IT / Tech"
+        ], index=0)
         
-        with st.expander("Xem bảng dữ liệu chi tiết"):
-            st.dataframe(df, use_container_width=True)
+        level = st.select_slider("2. Trình độ hiện tại:", options=["A2", "B1", "B2", "C1"], value="B1")
+        
+        topics = st.multiselect("3. Chủ đề ưu tiên:", [
+            "Technology", "Business & Finance", "Health & Lifestyle", "Academic & Science", "Daily Life", "Travel"
+        ], default=["Technology", "Business & Finance"])
+        
+        daily_mins = st.radio("4. Thời gian học mỗi ngày:", [5, 10, 15], index=1, format_func=lambda x: f"{x} phút/ngày")
+
+        submitted = st.form_submit_button("💾 Lưu cấu hình & Cập nhật lộ trình")
+        if submitted:
+            st.session_state.user_profile["goal"] = goal
+            st.session_state.user_profile["level"] = level
+            st.session_state.user_profile["topics"] = topics
+            st.session_state.user_profile["daily_minutes"] = daily_mins
+            st.success("Đã cập nhật hồ sơ cá nhân thành công! AI sẽ tạo lộ trình dựa trên cài đặt mới.")
