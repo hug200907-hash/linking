@@ -417,7 +417,7 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
                 else:
                     st.error(f"❌ Sai rồi. Nghĩa đúng là: **{w['vietnamese']}**")
 
-        # TỰ ĐỘNG ĐỌC CẢ TỪ TIẾNG ANH LẪN NGHĨA TIẾNG VIỆT QUA st.iframe DATA URI
+        # TỰ ĐỘNG ĐỌC CẢ TỪ TIẾNG ANH LẪN NGHĨA TIẾNG VIỆT QUA st.components.v1.html
         if st.session_state.review_answered:
             st.markdown("---")
             st.markdown(f"🔊 **Đang tự động đọc từ & nghĩa:** *{w['word']}* — *{w['vietnamese']}*")
@@ -459,9 +459,7 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
             </script>
             """
             
-            encoded_html = urllib.parse.quote(tts_code)
-            data_uri = f"data:text/html;charset=utf-8,{encoded_html}"
-            st.iframe(src=data_uri, height=0)
+            st.components.v1.html(tts_code, height=0)
             
             col_next, col_stop = st.columns(2)
             with col_next:
