@@ -327,7 +327,7 @@ if menu == "🏠 Daily Stream (5 từ hôm nay)":
             st.rerun()
 
 # ==========================================
-# 6. MÀN HÌNH 2: ÔN TẬP ĐA DẠNG (GIỮ NGUYÊN)
+# 6. MÀN HÌNH 2: ÔN TẬP ĐA DẠNG (ĐÃ TÍCH HỢP AUTO ĐỌC CẢ ANH & VIỆT)
 # ==========================================
 elif menu == "🎯 Ôn tập đa dạng (Practice)":
     st.markdown("<h1 class='main-header'>Hệ Thống Ôn Tập SRS Đa Dạng 🎯</h1>", unsafe_allow_html=True)
@@ -416,11 +416,38 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
                 else:
                     st.error(f"❌ Sai rồi. Nghĩa đúng là: **{w['vietnamese']}**")
 
+        # TỰ ĐỘNG ĐỌC CẢ TỪ TIẾNG ANH LẪN NGHĨA TIẾNG VIỆT SAU KHI NỘP BÀI
         if st.session_state.review_answered:
             st.markdown("---")
-            st.markdown("🔊 **Tự động phát âm từ vựng & ngữ nghĩa:**")
-            sound_url = f"https://dict.youdao.com/dictvoice?audio={w['word']}&type=2"
-            st.components.v1.iframe(src=sound_url, height=45, scrolling=False)
+            st.markdown(f"🔊 **Đang tự động đọc từ & nghĩa:** *{w['word']}* — *{w['vietnamese']}*")
+            
+            # Sử dụng HTML5 Speech Synthesis API để trình duyệt tự động đọc song ngữ Anh - Việt
+            tts_code = f"""
+            <script>
+                function speakWord() {{
+                    if ('speechSynthesis' in window) {{
+                        window.speechSynthesis.cancel(); // Dừng các giọng đọc cũ đang chờ
+                        
+                        // Đọc từ tiếng Anh
+                        let utteranceEn = new SpeechSynthesisUtterance("{w['word']}");
+                        utteranceEn.lang = 'en-US';
+                        utteranceEn.rate = 0.9;
+                        
+                        // Đọc nghĩa tiếng Việt sau khi đọc xong từ tiếng Anh
+                        utteranceEn.onend = function() {{
+                            let utteranceVi = new SpeechSynthesisUtterance("{w['vietnamese']}");
+                            utteranceVi.lang = 'vi-VN';
+                            utteranceVi.rate = 1.0;
+                            window.speechSynthesis.speak(utteranceVi);
+                        }};
+                        
+                        window.speechSynthesis.speak(utteranceEn);
+                    }}
+                }}
+                speakWord();
+            </script>
+            """
+            st.components.v1.html(tts_code, height=0)
             
             col_next, col_stop = st.columns(2)
             with col_next:
@@ -441,13 +468,12 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
                     st.rerun()
 
 # ==========================================
-# 7. MÀN HÌNH 3: AI TUTOR ASSISTANT (CẢI TIẾN)
+# 7. MÀN HÌNH 3: AI TUTOR ASSISTANT
 # ==========================================
 elif menu == "🤖 AI Tutor Assistant":
     st.markdown("<h1 class='main-header'>AI Tutor Assistant 🤖</h1>", unsafe_allow_html=True)
     st.markdown("<p class='sub-header'>Trợ lý AI thông minh sẵn sàng giải đáp ngữ pháp, phân biệt từ vựng hoặc tạo ngữ cảnh giao tiếp cho bạn.</p>", unsafe_allow_html=True)
     
-    # Nợ gợi ý câu hỏi nhanh (Quick Prompt Chips)
     st.markdown("💡 **Gợi ý câu hỏi nhanh:**")
     q_col1, q_col2, q_col3 = st.columns(3)
     if q_col1.button("🔍 Phân biệt các từ vựng hôm nay"):
@@ -478,7 +504,7 @@ elif menu == "🤖 AI Tutor Assistant":
                 st.warning("⚠️ Vui lòng cấu hình OpenRouter / MiniMax API Key ở Sidebar bên trái để trò chuyện với AI.")
 
 # ==========================================
-# 8. MÀN HÌNH 4: TIẾN ĐỘ & GAMIFICATION (CẢI TIẾN)
+# 8. MÀN HÌNH 4: TIẾN ĐỘ & GAMIFICATION
 # ==========================================
 elif menu == "📊 Tiến độ & Gamification":
     st.markdown("<h1 class='main-header'>Tiến Độ Học Tập & Thống Kê 📊</h1>", unsafe_allow_html=True)
@@ -507,7 +533,7 @@ elif menu == "📊 Tiến độ & Gamification":
     b_col3.info("🚀 **Nhà thám hiểm AI**\nSử dụng thành công tính năng tạo từ vựng thông minh qua MiniMax AI.")
 
 # ==========================================
-# 9. MÀN HÌNH 5: ONBOARDING & THIẾT LẬP (CẢI TIẾN)
+# 9. MÀN HÌNH 5: ONBOARDING & THIẾT LẬP
 # ==========================================
 elif menu == "⚙️ Onboarding & Thiết lập":
     st.markdown("<h1 class='main-header'>Thiết Lập Lộ Trình & Cá Nhân Hóa ⚙️</h1>", unsafe_allow_html=True)
