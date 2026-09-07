@@ -416,53 +416,64 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
                 else:
                     st.error(f"❌ Sai rồi. Nghĩa đúng là: **{w['vietnamese']}**")
 
-# TỰ ĐỘNG ĐỌC CẢ TỪ TIẾNG ANH LẪN NGHĨA TIẾNG VIỆT (CHUẨN GIỌNG VIỆT)
+# TỰ ĐỘNG ĐỌC CẢ TỪ TIẾNG ANH LẪN NGHĨA TIẾNG VIỆT (DÙNG ST.IFRAME & DATA URI)
         if st.session_state.review_answered:
             st.markdown("---")
             st.markdown(f"🔊 **Đang tự động đọc từ & nghĩa:** *{w['word']}* — *{w['vietnamese']}*")
             
-            # Cập nhật script ép buộc nhận diện giọng tiếng Việt chuẩn (vi-VN)
-            tts_code = f"""
-            <script>
-                function speakWord() {{
-                    if ('speechSynthesis' in window) {{
-                        window.speechSynthesis.cancel(); // Dừng các giọng đọc cũ
-                        
-                        // 1. Đọc từ tiếng Anh (Giọng Anh-Mỹ)
-                        let utteranceEn = new SpeechSynthesisUtterance("{w['word']}");
-                        utteranceEn.lang = 'en-US';
-                        utteranceEn.rate = 0.9;
-                        
-                        // 2. Khi đọc xong từ tiếng Anh thì đọc nghĩa tiếng Việt
-                        utteranceEn.onend = function() {{
-                            let utteranceVi = new SpeechSynthesisUtterance("{w['vietnamese']}");
-                            utteranceVi.lang = 'vi-VN';
-                            utteranceVi.rate = 1.0;
+            import urllib.parse
+            
+            # Xây dựng nội dung HTML hoàn chỉnh chứa script phát âm
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"></head>
+            <body>
+                <script>
+                    function speakWord() {{
+                        if ('speechSynthesis' in window) {{
+                            window.speechSynthesis.cancel(); // Dừng các giọng đọc cũ
                             
-                            // Lọc và ép chọn đúng giọng tiếng Việt có sẵn trên thiết bị của bạn
-                            let voices = window.speechSynthesis.getVoices();
-                            let viVoice = voices.find(v => v.lang.toLowerCase().includes('vi') || v.lang.toLowerCase().includes('viet'));
-                            if (viVoice) {{
-                                utteranceVi.voice = viVoice;
-                            }}
+                            // 1. Đọc từ tiếng Anh (Giọng Anh-Mỹ)
+                            let utteranceEn = new SpeechSynthesisUtterance("{w['word']}");
+                            utteranceEn.lang = 'en-US';
+                            utteranceEn.rate = 0.9;
                             
-                            window.speechSynthesis.speak(utteranceVi);
-                        }};
-                        
-                        window.speechSynthesis.speak(utteranceEn);
+                            // 2. Khi đọc xong từ tiếng Anh thì đọc nghĩa tiếng Việt
+                            utteranceEn.onend = function() {{
+                                let utteranceVi = new SpeechSynthesisUtterance("{w['vietnamese']}");
+                                utteranceVi.lang = 'vi-VN';
+                                utteranceVi.rate = 1.0;
+                                
+                                // Lọc và ép chọn đúng giọng tiếng Việt có sẵn trên thiết bị
+                                let voices = window.speechSynthesis.getVoices();
+                                let viVoice = voices.find(v => v.lang.toLowerCase().includes('vi') || v.lang.toLowerCase().includes('viet'));
+                                if (viVoice) {{
+                                    utteranceVi.voice = viVoice;
+                                }}
+                                
+                                window.speechSynthesis.speak(utteranceVi);
+                            }};
+                            
+                            window.speechSynthesis.speak(utteranceEn);
+                        }}
                     }}
-                }}
-                
-                // Đảm bảo trình duyệt đã load xong danh sách giọng nói trước khi gọi
-                if (window.speechSynthesis.getVoices().length > 0) {{
-                    speakWord();
-                }} else {{
-                    window.speechSynthesis.onvoiceschanged = speakWord;
-                    speakWord();
-                }}
-            </script>
+                    
+                    if (window.speechSynthesis.getVoices().length > 0) {{
+                        speakWord();
+                    }} else {{
+                        window.speechSynthesis.onvoiceschanged = speakWord;
+                        speakWord();
+                    }}
+                </script>
+            </body>
+            </html>
             """
-            st.components.v1.html(tts_code, height=0)
+            
+            # Mã hóa nội dung HTML thành dạng Data URI để chạy qua st.iframe
+            encoded_html = urllib.parse.quote(html_content)
+            data_uri = f"data:text/html;charset=utf-8,{encoded_html}"
+            st.iframe(data_uri, height=0, scrolling=False)
             
             col_next, col_stop = st.columns(2)
             with col_next:
@@ -481,7 +492,6 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
                     st.session_state.review_active = False
                     st.session_state.review_answered = False
                     st.rerun()
-
 # ==========================================
 # 7. MÀN HÌNH 3: AI TUTOR ASSISTANT
 # ==========================================
