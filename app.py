@@ -164,7 +164,6 @@ if "daily_words" not in st.session_state:
         }
     ]
 
-# Trạng thái Daily Stream & SRS Review Session
 if "stream_idx" not in st.session_state:
     st.session_state.stream_idx = 0
 
@@ -174,7 +173,6 @@ if "learning_history" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# Trạng thái phiên Ôn tập Ngẫu nhiên (SRS Session)
 if "review_active" not in st.session_state:
     st.session_state.review_active = False
 if "review_mode" not in st.session_state:
@@ -186,7 +184,6 @@ if "review_answered" not in st.session_state:
 if "review_user_ans" not in st.session_state:
     st.session_state.review_user_ans = ""
 
-# Đảm bảo tất cả từ hiện tại đều có record trong learning_history
 for item in st.session_state.daily_words:
     w_key = item['word']
     if w_key not in st.session_state.learning_history:
@@ -197,7 +194,6 @@ for item in st.session_state.daily_words:
             "status": item.get("status", "Learning")
         }
 
-# Hàm tính thời gian ôn tập tiếp theo (SRS Schedule)
 def get_srs_schedule(streak):
     if streak == 0:
         return "🔴 Hôm nay (Cần ôn ngay)", 0
@@ -209,9 +205,6 @@ def get_srs_schedule(streak):
         return f"🟢 {streak * 2} ngày sau", streak * 2
     return "🔴 Hôm nay", 0
 
-# ==========================================
-# 3. AI HELPER FUNCTION
-# ==========================================
 def call_minimax_ai(prompt: str, system_prompt: str = "You are an expert AI English Tutor.", api_key: str = "", base_url: str = "https://openrouter.ai/api/v1") -> str:
     if not api_key:
         return "⚠️ Vui lòng nhập OpenRouter/MiniMax API Key ở thanh Sidebar bên trái để kích hoạt AI."
@@ -256,7 +249,7 @@ with st.sidebar:
     st.markdown(f"🏆 **Từ đã Master:** **{st.session_state.user_profile['total_mastered']} từ**")
 
 # ==========================================
-# 5. MÀN HÌNH 1: DAILY STREAM
+# 5. MÀN HÌNH 1: DAILY STREAM (GIỮ NGUYÊN)
 # ==========================================
 if menu == "🏠 Daily Stream (5 từ hôm nay)":
     st.markdown("<h1 class='main-header'>Daily Stream 📚</h1>", unsafe_allow_html=True)
@@ -334,13 +327,12 @@ if menu == "🏠 Daily Stream (5 từ hôm nay)":
             st.rerun()
 
 # ==========================================
-# 6. MÀN HÌNH 2: ÔN TẬP ĐA DẠNG (SRS & RANDOM BỐC THĂM)
+# 6. MÀN HÌNH 2: ÔN TẬP ĐA DẠNG (GIỮ NGUYÊN)
 # ==========================================
 elif menu == "🎯 Ôn tập đa dạng (Practice)":
     st.markdown("<h1 class='main-header'>Hệ Thống Ôn Tập SRS Đa Dạng 🎯</h1>", unsafe_allow_html=True)
     st.markdown("<p class='sub-header'>Hệ thống tự động tính lịch ôn tập (Spaced Repetition) và kiểm tra phản xạ ngẫu nhiên.</p>", unsafe_allow_html=True)
 
-    # Hiển thị lịch trình SRS của các từ hiện tại
     st.subheader("📅 Lịch ôn tập & Thời gian đến lần tiếp theo")
     for w in st.session_state.daily_words:
         w_hist = st.session_state.learning_history.get(w['word'], {"streak": 0})
@@ -353,7 +345,6 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
 
     st.markdown("---")
 
-    # Nút bắt đầu phiên ôn tập ngẫu nhiên
     if not st.session_state.review_active:
         if st.button("🚀 Bắt đầu phiên ôn tập ngẫu nhiên", use_container_width=True):
             st.session_state.review_active = True
@@ -367,7 +358,6 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
         
         st.info(f"⚡ **Dạng bài kiểm tra ngẫu nhiên:** `{mode}`")
         
-        # 1. Flashcard Mode
         if mode == "Flashcard":
             st.markdown("<div class='flashcard-box'>", unsafe_allow_html=True)
             st.markdown(f"## ❓ Nghĩa Việt: {w['vietnamese']}")
@@ -381,7 +371,6 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
             else:
                 st.success(f"Đáp án đúng: **{w['word']}** ({w['ipa']}) - *{w['english_meaning']}*")
 
-        # 2. Typed Recall Mode
         elif mode == "Typed Recall":
             st.write(f"Định nghĩa: **{w['english_meaning']}** (Nghĩa Việt: *{w['vietnamese']}*)")
             ans = st.text_input("Nhập chính xác từ tiếng Anh:", key="rand_typed")
@@ -396,7 +385,6 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
                 else:
                     st.error(f"❌ Chưa chính xác. Đáp án đúng là: **{w['word']}**")
 
-        # 3. Fill-in-the-blank Mode
         elif mode == "Fill-in":
             masked = w['examples'][0].replace(w['word'], "_____").replace(w['word'].lower(), "_____")
             st.markdown(f"**Câu hoàn chỉnh:** {masked}")
@@ -412,7 +400,6 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
                 else:
                     st.error(f"❌ Sai rồi. Từ đúng phải là: **{w['word']}**")
 
-        # 4. Multiple Choice Mode
         elif mode == "Multiple Choice":
             options = [w['vietnamese']] + [item['vietnamese'] for item in st.session_state.daily_words if item['word'] != w['word']][:3]
             random.shuffle(options)
@@ -429,7 +416,6 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
                 else:
                     st.error(f"❌ Sai rồi. Nghĩa đúng là: **{w['vietnamese']}**")
 
-        # REQUIREMENT 3: AUTO AUDIO PLAYBACK (Đọc âm thanh tự động ngay sau khi trả lời dù đúng hay sai)
         if st.session_state.review_answered:
             st.markdown("---")
             st.markdown("🔊 **Tự động phát âm từ vựng & ngữ nghĩa:**")
@@ -439,13 +425,11 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
             col_next, col_stop = st.columns(2)
             with col_next:
                 if st.button("➡️ Câu hỏi ngẫu nhiên tiếp theo"):
-                    # Cập nhật streak SRS giả định
                     hist = st.session_state.learning_history.setdefault(w['word'], {"streak": 0})
                     hist['streak'] += 1
                     hist['reviews'] += 1
                     hist['last_reviewed'] = datetime.date.today().isoformat()
                     
-                    # Reset để bốc câu mới
                     st.session_state.review_answered = False
                     st.session_state.review_word = random.choice(st.session_state.daily_words)
                     st.session_state.review_mode = random.choice(["Flashcard", "Typed Recall", "Fill-in", "Multiple Choice"])
@@ -457,39 +441,99 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
                     st.rerun()
 
 # ==========================================
-# 7. MÀN HÌNH 3: AI TUTOR ASSISTANT
+# 7. MÀN HÌNH 3: AI TUTOR ASSISTANT (CẢI TIẾN)
 # ==========================================
 elif menu == "🤖 AI Tutor Assistant":
     st.markdown("<h1 class='main-header'>AI Tutor Assistant 🤖</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='sub-header'>Trợ lý AI thông minh sẵn sàng giải đáp ngữ pháp, phân biệt từ vựng hoặc tạo ngữ cảnh giao tiếp cho bạn.</p>", unsafe_allow_html=True)
     
+    # Nợ gợi ý câu hỏi nhanh (Quick Prompt Chips)
+    st.markdown("💡 **Gợi ý câu hỏi nhanh:**")
+    q_col1, q_col2, q_col3 = st.columns(3)
+    if q_col1.button("🔍 Phân biệt các từ vựng hôm nay"):
+        st.session_state.chat_history.append({"role": "user", "content": "Hãy giúp tôi phân biệt các từ vựng trong Daily Stream hôm nay một cách dễ hiểu nhất."})
+    if q_col2.button("✍️ Viết đoạn văn chêm từ"):
+        st.session_state.chat_history.append({"role": "user", "content": "Hãy viết một đoạn hội thoại ngắn tiếng Anh sử dụng các từ vựng hiện tại và dịch nghĩa."})
+    if q_col3.button("🎯 Mẹo ghi nhớ lâu"):
+        st.session_state.chat_history.append({"role": "user", "content": "Chia sẻ cho tôi phương pháp ghi nhớ từ vựng tiếng Anh theo ngữ cảnh hiệu quả nhất."})
+        
+    st.markdown("---")
+
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
 
-    if user_prompt := st.chat_input("Hỏi AI (VD: Phân biệt Resilient và Tough...)"):
+    if user_prompt := st.chat_input("Hỏi AI bất cứ điều gì về tiếng Anh..."):
         st.session_state.chat_history.append({"role": "user", "content": user_prompt})
         with st.chat_message("user"):
             st.write(user_prompt)
 
         with st.chat_message("assistant"):
             if api_key_input:
-                with st.spinner("AI đang phản hồi..."):
+                with st.spinner("AI đang tư duy và phản hồi..."):
                     reply = call_minimax_ai(user_prompt, api_key=api_key_input, base_url=base_url_input)
                     st.write(reply)
                     st.session_state.chat_history.append({"role": "assistant", "content": reply})
             else:
-                st.warning("Cung cấp API Key ở Sidebar để chat với AI.")
+                st.warning("⚠️ Vui lòng cấu hình OpenRouter / MiniMax API Key ở Sidebar bên trái để trò chuyện với AI.")
 
 # ==========================================
-# 8 & 9. TIẾN ĐỘ & ONBOARDING
+# 8. MÀN HÌNH 4: TIẾN ĐỘ & GAMIFICATION (CẢI TIẾN)
 # ==========================================
 elif menu == "📊 Tiến độ & Gamification":
-    st.markdown("<h1 class='main-header'>Tiến Độ Học Tập 📊</h1>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns(3)
-    col1.metric("🔥 Chuỗi Streak", f"{st.session_state.user_profile['streak']} Ngày")
-    col2.metric("🏆 Tổng từ đã Master", f"{st.session_state.user_profile['total_mastered']} Từ")
-    col3.metric("🧠 Retention Rate", f"{st.session_state.user_profile['retention_rate']}%")
+    st.markdown("<h1 class='main-header'>Tiến Độ Học Tập & Thống Kê 📊</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='sub-header'>Theo dõi hành trình chinh phục từ vựng và các thành tích cá nhân của bạn.</p>", unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("🔥 Chuỗi Streak", f"{st.session_state.user_profile['streak']} Ngày", "+1 hôm nay")
+    col2.metric("🏆 Tổng từ đã Master", f"{st.session_state.user_profile['total_mastered']} Từ", "+5 từ mới")
+    col3.metric("🧠 Retention Rate", f"{st.session_state.user_profile['retention_rate']}%", "+3% hiệu suất")
+    col4.metric("⏱️ Thời gian học", f"{st.session_state.user_profile['daily_minutes']} phút/ngày", "Mục tiêu đạt chuẩn")
+    
+    st.markdown("---")
+    
+    st.subheader("📈 Biểu đồ ghi nhớ từ vựng qua các tuần")
+    chart_data = pd.DataFrame(
+        {"Số từ đã ghi nhớ": [10, 15, 22, 28, 35, 42, 50]},
+        index=["Tuần 1", "Tuần 2", "Tuần 3", "Tuần 4", "Tuần 5", "Tuần 6", "Tuần này"]
+    )
+    st.line_chart(chart_data)
+    
+    st.markdown("---")
+    st.subheader("🏅 Bộ sưu tập huy hiệu thành tựu")
+    b_col1, b_col2, b_col3 = st.columns(3)
+    b_col1.success("🌟 **Chăm chỉ 5 ngày**\nHoàn thành streak 5 ngày liên tục không gián đoạn.")
+    b_col2.success("🧠 **Siêu trí nhớ từ vựng**\nĐạt tỷ lệ ghi nhớ (Retention Rate) trên 85%.")
+    b_col3.info("🚀 **Nhà thám hiểm AI**\nSử dụng thành công tính năng tạo từ vựng thông minh qua MiniMax AI.")
 
+# ==========================================
+# 9. MÀN HÌNH 5: ONBOARDING & THIẾT LẬP (CẢI TIẾN)
+# ==========================================
 elif menu == "⚙️ Onboarding & Thiết lập":
-    st.markdown("<h1 class='main-header'>Thiết Lập Lộ Trình ⚙️</h1>", unsafe_allow_html=True)
-    st.write("Cài đặt thông tin mục tiêu và trình độ học tập tại đây.")
+    st.markdown("<h1 class='main-header'>Thiết Lập Lộ Trình & Cá Nhân Hóa ⚙️</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='sub-header'>Tùy chỉnh mục tiêu học tập, trình độ và các chủ đề yêu thích để hệ thống tinh chỉnh từ vựng phù hợp nhất.</p>", unsafe_allow_html=True)
+    
+    with st.form("settings_form"):
+        goal = st.selectbox("🎯 Mục tiêu chính:", ["IELTS 6.5+", "Giao tiếp công sở", "Du lịch & Cuộc sống", "Luyện thi TOEIC"], index=0)
+        level = st.selectbox("📊 Trình độ hiện tại:", ["A2", "B1", "B2", "C1"], index=1)
+        topics = st.multiselect("📚 Chủ đề quan tâm:", ["Technology", "Business", "Environment", "Science", "Lifestyle", "Education"], default=["Technology", "Business"])
+        daily_min = st.slider("⏱️ Thời gian học mục tiêu mỗi ngày (phút):", 5, 30, 10)
+        
+        submitted = st.form_submit_button("💾 Lưu thay đổi lộ trình")
+        if submitted:
+            st.session_state.user_profile["goal"] = goal
+            st.session_state.user_profile["level"] = level
+            st.session_state.user_profile["topics"] = topics
+            st.session_state.user_profile["daily_minutes"] = daily_min
+            st.success("🎉 Đã cập nhật thiết lập lộ trình thành công!")
+            
+    st.markdown("---")
+    st.subheader("🛠️ Quản lý dữ liệu hệ thống")
+    d_col1, d_col2 = st.columns(2)
+    with d_col1:
+        if st.button("🗑️ Reset lịch sử học tập"):
+            st.session_state.learning_history = {}
+            st.success("Đã xóa sạch lịch sử SRS hiện tại.")
+    with d_col2:
+        if st.button("📥 Xuất dữ liệu từ vựng hiện tại (JSON)"):
+            st.json(st.session_state.daily_words)
