@@ -416,35 +416,50 @@ elif menu == "🎯 Ôn tập đa dạng (Practice)":
                 else:
                     st.error(f"❌ Sai rồi. Nghĩa đúng là: **{w['vietnamese']}**")
 
-        # TỰ ĐỘNG ĐỌC CẢ TỪ TIẾNG ANH LẪN NGHĨA TIẾNG VIỆT SAU KHI NỘP BÀI
+# TỰ ĐỘNG ĐỌC CẢ TỪ TIẾNG ANH LẪN NGHĨA TIẾNG VIỆT (CHUẨN GIỌNG VIỆT)
         if st.session_state.review_answered:
             st.markdown("---")
             st.markdown(f"🔊 **Đang tự động đọc từ & nghĩa:** *{w['word']}* — *{w['vietnamese']}*")
             
-            # Sử dụng HTML5 Speech Synthesis API để trình duyệt tự động đọc song ngữ Anh - Việt
+            # Cập nhật script ép buộc nhận diện giọng tiếng Việt chuẩn (vi-VN)
             tts_code = f"""
             <script>
                 function speakWord() {{
                     if ('speechSynthesis' in window) {{
-                        window.speechSynthesis.cancel(); // Dừng các giọng đọc cũ đang chờ
+                        window.speechSynthesis.cancel(); // Dừng các giọng đọc cũ
                         
-                        // Đọc từ tiếng Anh
+                        // 1. Đọc từ tiếng Anh (Giọng Anh-Mỹ)
                         let utteranceEn = new SpeechSynthesisUtterance("{w['word']}");
                         utteranceEn.lang = 'en-US';
                         utteranceEn.rate = 0.9;
                         
-                        // Đọc nghĩa tiếng Việt sau khi đọc xong từ tiếng Anh
+                        // 2. Khi đọc xong từ tiếng Anh thì đọc nghĩa tiếng Việt
                         utteranceEn.onend = function() {{
                             let utteranceVi = new SpeechSynthesisUtterance("{w['vietnamese']}");
                             utteranceVi.lang = 'vi-VN';
                             utteranceVi.rate = 1.0;
+                            
+                            // Lọc và ép chọn đúng giọng tiếng Việt có sẵn trên thiết bị của bạn
+                            let voices = window.speechSynthesis.getVoices();
+                            let viVoice = voices.find(v => v.lang.toLowerCase().includes('vi') || v.lang.toLowerCase().includes('viet'));
+                            if (viVoice) {{
+                                utteranceVi.voice = viVoice;
+                            }}
+                            
                             window.speechSynthesis.speak(utteranceVi);
                         }};
                         
                         window.speechSynthesis.speak(utteranceEn);
                     }}
                 }}
-                speakWord();
+                
+                // Đảm bảo trình duyệt đã load xong danh sách giọng nói trước khi gọi
+                if (window.speechSynthesis.getVoices().length > 0) {{
+                    speakWord();
+                }} else {{
+                    window.speechSynthesis.onvoiceschanged = speakWord;
+                    speakWord();
+                }}
             </script>
             """
             st.components.v1.html(tts_code, height=0)
